@@ -1,25 +1,79 @@
 # Heightmap terrain mesh
 
-Turn a grayscale image into a closed terrain STL, with control over its physical size and height. The program prepares the image, builds the top, bottom, and side walls, then checks the resulting mesh before saving it.
+This program turns a grayscale heightmap into a solid 3D terrain model. Light areas become high ground, and dark areas become low ground. You can choose the model's width and height, then save it as an STL file for 3D printing.
 
-![Terrain surface generated from the included sample](examples/terrain-preview.png)
+![A 3D hill made from the sample heightmap](examples/terrain-preview.png)
+
+## How the model is made
+
+A heightmap stores height as the brightness of each pixel. The program puts those pixels on a grid and turns each group of four neighboring points into two triangles. These triangles make the top surface. More triangles form the bottom and side walls so the model is closed.
+
+The program can read 8-bit and 16-bit grayscale images. A 16-bit image can store more height levels. Color images are converted to grayscale before the model is built.
+
+The sample image is a generated hill. A normal picture of a map with contour lines will not work the same way. The input needs to store elevation as pixel brightness. The program does not look up geographic heights or convert map projections.
+
+## Controlling the size
+
+| Option | What it changes |
+| --- | --- |
+| `--width-mm` | The full width of the model in millimeters |
+| `--spacing` | The distance between original pixel centers if width is not set |
+| `--relief` | The height from the lowest ground to the highest ground |
+| `--height-scale` | Height per brightness level when relief is not set |
+| `--base-thickness` | How far the bottom sits below the lowest ground |
+| `--base` | The bottom's Z coordinate when base thickness is not set |
+| `--max-size` | The largest allowed grid dimension |
+| `--smooth` | How much to smooth the input image |
+| `--crop` | A rectangle to cut from the input before building the model |
+
+Width and depth follow the shape of the cropped image's grid. Without `--width-mm`, the default spacing is 1 mm. Pixel centers define the boundary, so a 201 by 101 pixel image spans 200 by 100 mm at that spacing. X follows image columns and Y follows image rows. The image is not flipped.
+
+The default maximum grid size is 256 pixels on its longest side. If the image is bigger, the program reduces the number of points while keeping the physical size the same. This makes the STL smaller. A 256 by 256 grid already has about 262,000 triangles.
+
+`--relief 20` maps the lowest brightness in the prepared image to 0 mm and the highest to 20 mm. A constant image stays flat. Without relief, the default height scale is 0.1 mm per brightness level. Relief is often easier to use with 16-bit images because their values can be much larger.
+
+Smoothing uses a Gaussian blur before the grid is resized. Its strength is measured in input pixels. A crop uses X, Y, width, and height and must be at least two pixels wide and tall.
+
+## Checking the mesh
+
+Before saving, the program checks for open edges, edges shared by too many triangles, faces pointing the wrong way around a shared edge, and triangles with no area. It also checks that the signed volume is positive. These checks help catch problems with how the surface is joined together. They do not check every possible self-intersection or choose printer settings.
+
+The JSON report includes the dimensions, volume, surface area, triangle count, grid spacing, and check results. The preview shows only the top surface. The report includes the whole solid, including the base. The bottom must sit below the lowest terrain point.
+
+All measurements use millimeters. STL files do not store units, so use millimeters when you open the file in another program.
 
 ## Try it
 
-Use Python 3.11 or newer. From this folder:
+Use Python 3.11 or newer. Open a terminal in this project's folder and create a virtual environment. This keeps its packages separate from your other Python projects.
 
 ```sh
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS / Linux: source .venv/bin/activate
+```
+
+On Windows, activate it with this command.
+
+```sh
+.venv\Scripts\activate
+```
+
+On macOS or Linux, use this command instead.
+
+```sh
+source .venv/bin/activate
+```
+
+Then install the packages the project needs.
+
+```sh
 python -m pip install -r requirements.txt
+```
+
+```sh
 python sample_heightmap.py
 python terrain.py heightmap.png --width-mm 100 --relief 20 --base-thickness 3 --preview preview.png
 ```
 
-This produces `terrain.stl`, `terrain.json`, and `preview.png`. The sample is a generated hill, not a measured geographic dataset. Open the STL in a slicer to inspect it before printing.
-
-## Size, resolution, and height
+The example saves `terrain.stl`, `terrain.json`, and `preview.png`. Open the STL in a slicer to inspect it before printing.
 
 ```sh
 python terrain.py heightmap.png --width-mm 150 --relief 25 --base-thickness 4 --max-size 128 --smooth 1.5
@@ -27,34 +81,9 @@ python terrain.py heightmap.png --crop 10 5 40 30 --width-mm 80 --relief 12 --ou
 python terrain.py heightmap.png --spacing 0.5 --height-scale 0.05 --base -2
 ```
 
-| Option | Meaning |
-| --- | --- |
-| `--width-mm` | Total width in millimeters; depth follows the cropped image's grid aspect ratio |
-| `--spacing` | Distance between original pixel centers when width is not specified; defaults to 1 mm |
-| `--relief` | Map the prepared image's minimum to 0 and maximum to this height in millimeters |
-| `--height-scale` | Height per intensity level when relief is not specified; defaults to 0.1 |
-| `--base-thickness` | Put the bottom this far below the lowest prepared elevation |
-| `--base` | Absolute bottom Z when base thickness is not specified; defaults to -5 mm |
-| `--max-size` | Maximum grid dimension, default 256; smaller values reduce file size |
-| `--smooth` | Gaussian sigma in original image pixels, applied before resampling |
-| `--crop` | Input rectangle as X, Y, width, height; each dimension must be at least two pixels |
-| `--report` | Optional JSON report location; otherwise saved beside the STL |
+Use `--report` to choose where the JSON report is saved. Otherwise, it is placed beside the STL. `--base-thickness` takes priority over `--base`, and `--relief` takes priority over `--height-scale`.
 
-Resampling preserves the requested physical footprint. For example, a 201×101 image at 1 mm spacing spans 200×100 mm even if reduced to a much smaller grid. Pixel centers define the boundary, so an unscaled W×H image spans `(W-1) × (H-1)` intervals. X follows image columns and Y follows image rows; the image is not flipped.
-
-Both 8-bit and 16-bit grayscale PNGs retain their intensity precision. Color images are converted to grayscale. For 16-bit maps, `--relief` is often easier to use than the default per-intensity height scale. A constant image becomes flat when normalized. For geographic terrain, the input must already be an elevation raster; a picture with contour lines is not decoded into elevations. No map projection or real-world elevation lookup is performed.
-
-## Geometry and checks
-
-Every grid cell has two top triangles and two bottom triangles. Boundary edges receive side-wall triangles. The STL uses outward winding and a flat bottom. The base must be strictly below the lowest point.
-
-Before export, `mesh_checks.py` counts unique edges, checks shared-edge directions, rejects degenerate triangles, and computes signed volume. The report includes the bounds, dimensions, surface area, triangle count, grid spacing, and volume in millimeter units. A successful check requires a closed, consistently wound surface with positive signed volume. These topology checks do not perform a general self-intersection analysis or certify printer settings.
-
-The preview shows the prepared top surface, not the full solid base. Dimensions and volume in the report describe the entire solid. STL coordinates are interpreted as millimeters by this program; STL itself does not store unit metadata.
-
-The construction uses explicit loops to keep the geometry easy to follow. A 256×256 grid contains roughly 262,000 triangles. Higher resolution takes more memory during edge checking, so raise `--max-size` only when the detail is useful.
-
-## Python API
+The Python functions can also be used on their own.
 
 ```python
 from heightfield import load_heightmap, prepare
@@ -75,4 +104,4 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Tests check analytical block volume, STL round trips, opposite shared-edge winding, physical size after resampling, 16-bit input, normalization, cropping, smoothing, invalid options, and detection of open or reversed faces. GitHub Actions runs the same suite.
+The tests check known block volumes, saved STL files, shared edges, reversed faces, open surfaces, physical size after resizing, 16-bit input, smoothing, crops, and invalid settings. GitHub Actions runs the same tests.
