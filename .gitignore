@@ -12,3 +12,5 @@ results/
 *.png
 devices.json
 tape_dispense.gcode
+/terrain.json
+!examples/*.png

@@ -1,0 +1,37 @@
+{
+  "triangles": 12284,
+  "vertices": 6144,
+  "edges": 18426,
+  "boundary_edges": 0,
+  "nonmanifold_edges": 0,
+  "inconsistent_edges": 0,
+  "degenerate_triangles": 0,
+  "watertight": true,
+  "signed_volume_mm3": 51226.55253623924,
+  "surface_area_mm2": 16613.859488358477,
+  "bounds_mm": {
+    "min": [
+      0.0,
+      0.0,
+      -3.0
+    ],
+    "max": [
+      100.0,
+      74.6031723022461,
+      20.0
+    ],
+    "size": [
+      100.0,
+      74.6031723022461,
+      23.0
+    ]
+  },
+  "grid_shape": [
+    48,
+    64
+  ],
+  "grid_spacing_mm": [
+    1.5873015873015872,
+    1.5873015873015874
+  ]
+}
